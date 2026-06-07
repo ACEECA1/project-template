@@ -1,0 +1,149 @@
+package com.template.project.util;
+
+import com.template.project.dto.evaluation.CandidateEvaluationDTO;
+import com.template.project.dto.evaluation.CandidateSubmissionDTO;
+import com.template.project.dto.job.ExperienceRangeDTO;
+import com.template.project.dto.job.JobOfferDTO;
+import com.template.project.dto.job.StructuredJdDTO;
+import com.template.project.dto.auth.UserDTO;
+import com.template.project.model.evaluation.CV;
+import com.template.project.model.evaluation.CandidateEvaluation;
+import com.template.project.model.job.JobOffer;
+import com.template.project.model.evaluation.MatchScore;
+import com.template.project.model.job.StructuredJd;
+import com.template.project.model.auth.User;
+import org.springframework.stereotype.Component;
+
+import java.util.List;
+
+@Component
+public class MapperUtil {
+    public UserDTO toUserDto(User user) {
+        return new UserDTO(
+                user.getId(),
+                user.getUsername(),
+                user.getFirstName(),
+                user.getLastName(),
+                user.getEmail(),
+                user.getRole(),
+                user.getIsEnabled(),
+                user.getRhApprovalStatus(),
+                user.getCreatedAt(),
+                user.getUpdatedAt()
+        );
+    }
+
+    public StructuredJdDTO toStructuredJdDto(StructuredJd structuredJd) {
+        if (structuredJd == null) {
+            return null;
+        }
+        ExperienceRangeDTO rangeDTO = structuredJd.getExperienceRange() == null
+                ? null
+                : new ExperienceRangeDTO(structuredJd.getExperienceRange().getMinYears(), structuredJd.getExperienceRange().getMaxYears());
+
+        return new StructuredJdDTO(
+                structuredJd.getId(),
+                structuredJd.getTitle(),
+                structuredJd.getCompanyName(),
+                structuredJd.getRequiredSkills().stream().map(s -> s.getName()).toList(),
+                structuredJd.getPreferredSkills().stream().map(s -> s.getName()).toList(),
+                rangeDTO,
+                structuredJd.getResponsibilities().stream().map(r -> r.getDescription()).toList(),
+                structuredJd.getQualifications().stream().map(qualification -> qualification.getDescription()).toList(),
+                structuredJd.getWorkLocation(),
+                structuredJd.getEmploymentType()
+        );
+    }
+
+    public JobOfferDTO toJobOfferDto(JobOffer jobOffer) {
+        return new JobOfferDTO(
+                jobOffer.getId(),
+                jobOffer.getTitle(),
+                jobOffer.getRawText(),
+                jobOffer.getStatus(),
+                jobOffer.getJdRequestId(),
+                toStructuredJdDto(jobOffer.getStructuredJd()),
+                jobOffer.getCreatedAt(),
+                jobOffer.getUpdatedAt()
+        );
+    }
+
+    public CandidateEvaluationDTO toCandidateEvaluationDto(CandidateEvaluation evaluation) {
+        MatchScore matchScore = evaluation.getMatchScore();
+        Double overallScore = matchScore == null ? null : matchScore.getOverallScore();
+        String recommendation = matchScore == null ? null : matchScore.getRecommendation();
+        String reasoning = matchScore == null ? null : matchScore.getReasoning();
+        List<String> matchedSkills = matchScore == null
+                ? List.of()
+                : matchScore.getMatchedSkills().stream().map(item -> item.getName()).toList();
+        List<CandidateEvaluationDTO.MissingSkillDTO> missingSkills = matchScore == null
+                ? List.of()
+                : matchScore.getMissingSkills().stream()
+                .map(item -> new CandidateEvaluationDTO.MissingSkillDTO(item.getSkillName(), item.getImportance()))
+                .toList();
+        CandidateEvaluationDTO.ExperienceAlignmentDTO experienceAlignment = matchScore == null || matchScore.getExperienceAlignment() == null
+                ? null
+                : new CandidateEvaluationDTO.ExperienceAlignmentDTO(
+                new CandidateEvaluationDTO.YearsRequiredDTO(
+                        toIntegerYears(matchScore.getExperienceAlignment().getMinYearsRequired()),
+                        toIntegerYears(matchScore.getExperienceAlignment().getMaxYearsRequired())
+                ),
+                toIntegerYears(matchScore.getExperienceAlignment().getYearsCandidate()),
+                matchScore.getExperienceAlignment().getMatchPercentage()
+        );
+        CandidateEvaluationDTO.EducationMatchDTO educationMatch = matchScore == null || matchScore.getEducationMatch() == null
+                ? null
+                : new CandidateEvaluationDTO.EducationMatchDTO(
+                matchScore.getEducationMatch().getRequiredDegree(),
+                matchScore.getEducationMatch().getCandidateDegree(),
+                matchScore.getEducationMatch().getMatchLevel(),
+                matchScore.getEducationMatch().getReasoning()
+        );
+        return new CandidateEvaluationDTO(
+                evaluation.getId(),
+                evaluation.getStatus(),
+                overallScore,
+                recommendation,
+                reasoning,
+                matchedSkills,
+                missingSkills,
+                experienceAlignment,
+                educationMatch
+        );
+    }
+
+    public CandidateSubmissionDTO toCandidateSubmissionDto(CV cv) {
+        CandidateEvaluationDTO evaluationDTO = cv.getCandidateEvaluation() == null ? null : toCandidateEvaluationDto(cv.getCandidateEvaluation());
+        return new CandidateSubmissionDTO(
+                cv.getId(),
+                cv.getFileUrl(),
+                cv.getRawText(),
+                cv.getStatus(),
+                cv.getUploadDate(),
+                toJobOfferDto(cv.getJobOffer()),
+                evaluationDTO
+        );
+    }
+
+    public List<JobOfferDTO> toJobOfferDtos(List<JobOffer> jobOffers) {
+        return jobOffers.stream().map(this::toJobOfferDto).toList();
+    }
+
+    public List<CandidateSubmissionDTO> toCandidateSubmissionDtos(List<CV> cvs) {
+        return cvs.stream().map(this::toCandidateSubmissionDto).toList();
+    }
+
+    private Integer toIntegerYears(Double value) {
+        if (value == null) {
+            return null;
+        }
+        long rounded = Math.round(value);
+        if (rounded < Integer.MIN_VALUE) {
+            return Integer.MIN_VALUE;
+        }
+        if (rounded > Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        return (int) rounded;
+    }
+}
